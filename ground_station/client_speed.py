@@ -27,7 +27,6 @@ def main():
             string_input = b""
             loop_counter = 0
             frame_ctr = 0
-            # size = 6172
 
             while True:
 
@@ -48,18 +47,11 @@ def main():
                     print("len=" + str(len(string_input)))
                     now = datetime.now()
                     ptr_jpeg = open("outputs\output_file"+now.strftime("%M_%S_%f")+".jpeg", 'w+b')
-                    # binary_format = bytearray(data)
                     ptr_jpeg.write(string_input)
                     ptr_jpeg.close()
-                    # loop_counter = 0
                     ptr_jpeg = None
                     tmp = b""
                     string_input = b""
-
-                    if( frame_ctr <= 5):
-                        s.sendall(b'Start\r\n')
-                    else:
-                        s.sendall(b'Stop1\r\n')
 
         else:
             print("bye bye..\r\n")

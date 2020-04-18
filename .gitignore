@@ -2,3 +2,5 @@
 *.jpeg
 *.jpg
 ground_station/util/server_udp.py
+ground_station/output_file.txt
+ground_station/.idea/workspace.xml
