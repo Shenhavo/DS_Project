@@ -1,0 +1,4 @@
+
+*.jpeg
+*.jpg
+ground_station/util/server_udp.py
