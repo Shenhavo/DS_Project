@@ -35,7 +35,7 @@ def main():
             while True:
 
                 incoming_data = s.recv(MAIN_WIFI_M2M_BUFFER_SIZE)#pm.rx_bytes_to_read)
-                print(incoming_data)
+                # print(incoming_data)
                 if pm.mode == 0: # case idle state
                     if incoming_data[0] == NEW_FRAME_SOF:
 
@@ -58,8 +58,12 @@ def main():
                         else:
                             ErrorHandler("an image less than 1kB size has arrived")
                     elif incoming_data[0] == MID_FRAME_SOF:
-                        prnt(incoming_data, 0)
-                        ErrorHandler("mid frame received first!")
+                        prnt("Error: mid frame received first!", 2)
+                        prnt("systick to be missed: " + str(pm.sys_tick), 2)
+                        pm.clear_frame_properties()
+                        pm.rx_bytes_to_read = MAIN_WIFI_M2M_BUFFER_SIZE  # TODO: IMPORTANT TO CHANGE WHEN IMU IS IMPLEMENTED
+
+                        # TODO: count proceeding errors => network disconnection => fatal error
                     elif incoming_data[0] == IMU_SOF:
                         pm.mode = 2
                         prnt("TO BE CONTINUED", 0)
@@ -146,9 +150,9 @@ class PacketMngr:
         self.expected_num_of_packets = 0
         self.ptr_jpeg   = None
         self.mode       =   0 # 0 = off, 1 = Image, 2 = IMU
+        self.rx_buff = None
 
     def print_buff_len(self):
-        print("bytes to read: " + str(self.rx_bytes_to_read))
         try:
             print("buff len: " + str(len(self.rx_buff)))
         except:
