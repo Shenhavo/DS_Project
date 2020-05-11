@@ -4,3 +4,5 @@
 ground_station/util/server_udp.py
 ground_station/output_file.txt
 ground_station/.idea/workspace.xml
+ground_station/client_speed.py
+ground_station/gyro_img_info_extended.txt

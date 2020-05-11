@@ -3,6 +3,7 @@ import socket, time
 import numpy as n
 from datetime import datetime
 
+GLOBAL_VERBOSITY            =   1
 
 MAIN_WIFI_M2M_BUFFER_SIZE   =   1024
 NEW_FRAME_DATA_SIZE_B       =   1017
@@ -12,7 +13,21 @@ PORT = 6666  # Port to listen on (non-privileged ports are > 1023)
 NEW_FRAME_SOF               =	33 # '!'
 MID_FRAME_SOF	            =   65 # 'A'
 IMU_SOF			            =   105# 'i'
-GLOBAL_VERBOSITY            =   0
+
+IMU_SYSTICK_SHIFT_MSEC      =   50
+IMU_CALLS_PER_PACKET        =   10
+IMU_SOF_SIZE_B              =   1
+SYSTICK_SIZE_B              =   4
+IMU_DATA_SHIFT_SIZE_B       =   IMU_SOF_SIZE_B +   SYSTICK_SIZE_B
+IMU_PARAMETER_SIZE_B        =   2
+IMU_PARAMETERS_PER_CALL     =   6
+IMU_CALL_SIZE_B             =   IMU_PARAMETER_SIZE_B*IMU_PARAMETERS_PER_CALL
+GYRO_X_SHIFT                =   0
+GYRO_Y_SHIFT                =   2
+GYRO_Z_SHIFT                =   4
+ACC_X_SHIFT                 =   6
+ACC_Y_SHIFT                 =   8
+ACC_Z_SHIFT                 =   10
 
 
 def main():
@@ -59,19 +74,21 @@ def main():
                             ErrorHandler("an image less than 1kB size has arrived")
                     elif incoming_data[0] == MID_FRAME_SOF:
                         prnt("Error: mid frame received first!", 2)
-                        prnt("systick to be missed: " + str(pm.sys_tick), 2)
+                        prnt("img systick to be missed: " + str(pm.sys_tick), 2)
                         pm.clear_frame_properties()
                         pm.rx_bytes_to_read = MAIN_WIFI_M2M_BUFFER_SIZE  # TODO: IMPORTANT TO CHANGE WHEN IMU IS IMPLEMENTED
 
                         # TODO: count proceeding errors => network disconnection => fatal error
                     elif incoming_data[0] == IMU_SOF:
                         pm.mode = 2
-                        prnt("TO BE CONTINUED", 0)
+                        pm.sys_tick = FourBytesToUint32(incoming_data, IMU_SOF_SIZE_B) - IMU_SYSTICK_SHIFT_MSEC
+                        pm.print_IMU_data(incoming_data)
+                        pm.mode = 0
                 else:
                     if pm.mode == 1: # case image mode
                         tmp = incoming_data[1:]
                         pm.rx_buff = pm.rx_buff + tmp
-                        pm.print_buff_len()
+                        # pm.print_buff_len()
                         pm.frame_ctr = pm.frame_ctr + 1
                         prnt("Img " + str(pm.frame_ctr) + "/" + str(pm.expected_num_of_packets), 0)
 
@@ -84,7 +101,7 @@ def main():
                         else: # means this is the last packet
                             prnt("image size =", 0)
                             pm.print_buff_len()
-                            prnt(("systick = " + str(pm.sys_tick)),0)
+                            prnt(("img systick = " + str(pm.sys_tick)),0)
                             pm.ptr_jpeg = open("outputs\output_file"+str(pm.sys_tick)+now.strftime("_%M_%S_%f")+".jpeg", 'w+b')
                             pm.ptr_jpeg.write(pm.rx_buff)
                             pm.ptr_jpeg.close()
@@ -92,8 +109,9 @@ def main():
                             pm.clear_frame_properties()
                             pm.rx_bytes_to_read = MAIN_WIFI_M2M_BUFFER_SIZE # TODO: IMPORTANT TO CHANGE WHEN IMU IS IMPLEMENTED
                     elif pm.mode == 2: # case IMU mode
-                        prnt("TO BE CONTINUED", 0)
-
+                        pm.sys_tick = FourBytesToUint32(incoming_data, 1) # - IMU_SYSTICK_SHIFT_MSEC TODO: Revert and add the -50msec shift
+                        # pm.print_IMU_data(incoming_data)
+                        pm.mode = 0
         else:
             prnt("bye bye..\r\n")
             input()
@@ -157,6 +175,24 @@ class PacketMngr:
             print("buff len: " + str(len(self.rx_buff)))
         except:
             print("buff len: 0")
+
+    def print_IMU_data(self,a_byte_arr):
+        prnt(("imu systick = " + str(self.sys_tick)), 0)
+        for imu_call_idx in range(IMU_CALLS_PER_PACKET):
+            prnt(("Gyro X = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT) )), 0)
+            prnt(("Gyro Y = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT) )),
+                 0)
+            prnt(("Gyro Z = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT) )),
+                 0)
+            prnt(("Acc X = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT) )),
+                 0)
+            prnt(("Acc Y = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT) )),
+                 0)
+            prnt(("Acc Z = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT) )),
+                 0)
+
+
+
 
 if __name__ == "__main__":
     main()
