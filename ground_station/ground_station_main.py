@@ -116,12 +116,18 @@ def main():
             prnt("bye bye..\r\n")
             input()
             exit(1)
-
 def TwoBytesToUint16 (a_byte_arr, a_shift = 0):
-    return int(a_byte_arr[a_shift+0]) + int(a_byte_arr[a_shift+1])*256
+    return int.from_bytes( a_byte_arr[a_shift:a_shift+2],byteorder='little',signed=False)
+
 
 def FourBytesToUint32 (a_byte_arr, a_shift):
-    return int(a_byte_arr[a_shift+0]) + int(a_byte_arr[a_shift+1])*256 + int(a_byte_arr[a_shift+2])*65536 + int(a_byte_arr[a_shift+3])*16777216
+    return int.from_bytes( a_byte_arr[a_shift:a_shift+4],byteorder='little',signed=False)
+
+def TwoBytesToInt16 (a_byte_arr, a_shift = 0):
+    return int.from_bytes( a_byte_arr[a_shift:a_shift+2],byteorder='little',signed=True)
+
+def FourBytesToInt32 (a_byte_arr, a_shift):
+    return int.from_bytes( a_byte_arr[a_shift:a_shift+4],byteorder='little',signed=True)
 
 def ErrorHandler(a_string = ""):
     print("Fatal Error:")
@@ -179,16 +185,16 @@ class PacketMngr:
     def print_IMU_data(self,a_byte_arr):
         prnt(("imu systick = " + str(self.sys_tick)), 0)
         for imu_call_idx in range(IMU_CALLS_PER_PACKET):
-            prnt(("Gyro X = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT) )), 0)
-            prnt(("Gyro Y = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT) )),
+            prnt(("Gyro X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT) )), 0)
+            prnt(("Gyro Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT) )),
                  0)
-            prnt(("Gyro Z = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT) )),
+            prnt(("Gyro Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT) )),
                  0)
-            prnt(("Acc X = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT) )),
+            prnt(("Acc X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT) )),
                  0)
-            prnt(("Acc Y = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT) )),
+            prnt(("Acc Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT) )),
                  0)
-            prnt(("Acc Z = " + str(TwoBytesToUint16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT) )),
+            prnt(("Acc Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT) )),
                  0)
 
 
