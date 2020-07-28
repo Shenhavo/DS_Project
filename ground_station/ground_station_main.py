@@ -2,7 +2,7 @@
 import socket
 from datetime import datetime
 
-GLOBAL_VERBOSITY            =   0
+GLOBAL_VERBOSITY            =   5
 
 MAIN_WIFI_M2M_BUFFER_SIZE   =   1024
 FRAME_DATA_SIZE_B           =   1017
@@ -38,7 +38,6 @@ def main():
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     prnt(("date and time ="+ dt_string),0)
 
-
     pm  = PacketMngr(HOST, PORT)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -54,11 +53,11 @@ def main():
             while True:
 
                 incoming_data = s.recv(SOF_SIZE_B)
-
+                print("SOF="+str(incoming_data))
                 if incoming_data[0] == FRAME_SOF:
                     incoming_data = s.recv(FRAME_HEADER_WO_SOF_SIZE_B)
                     incoming_sys_tick   =    FourBytesToUint32(incoming_data, 0)
-
+                    print("tick=" + str(incoming_sys_tick))
                     if pm.frame_sys_tick == 0 or pm.frame_sys_tick == incoming_sys_tick:
                         pm.frame_sys_tick   = incoming_sys_tick
                     else:
@@ -67,7 +66,7 @@ def main():
                         continue
                     pm.frame_size = TwoBytesToUint16(incoming_data, 4)
                     if pm.frame_size > FRAME_DATA_SIZE_B:  # means that there will be an additional packet
-                        if pm.frame_rx_buff == None:
+                        if pm.frame_rx_buff == bytes(0):
                             pm.frame_rx_buff = s.recv(FRAME_DATA_SIZE_B)
                         else:
                             pm.frame_rx_buff = pm.frame_rx_buff + s.recv(FRAME_DATA_SIZE_B)
@@ -78,88 +77,14 @@ def main():
                         # ===== cleaning:  ======
                         pm.clear_frame_properties()
 
-                elif incoming_data[0] == IMU_SOF:
-                    pm.imu_rx_buff = s.recv(IMU_PACKET_SIZE_WO_HEADER)
-                    pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
-                    print(pm.imu_sys_tick)
-                    pm.print_IMU_data(pm.imu_rx_buff)
-                    # pm.clear_imu_properties()
+                # elif incoming_data[0] == IMU_SOF:
+                #     pm.imu_rx_buff = s.recv(IMU_PACKET_SIZE_WO_HEADER)
+                #     pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
+                #     print( "X" +str(pm.imu_sys_tick))
+                #     # pm.print_IMU_data(pm.imu_rx_buff)
+                #     # pm.clear_imu_properties()
                 else:
                     prnt("ERR SOF", 1)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                #
-                #
-                #     pm.frame_size   =   TwoBytesToUint16(incoming_data, 1)
-                #
-                #     if pm.frame_size > FRAME_DATA_SIZE_B:
-                #         pm.sys_tick = FourBytesToUint32(incoming_data, 3)
-                #         pm.mode = 1
-                #         pm.rx_buff = incoming_data[7:]
-                #         if pm.frame_size >= FRAME_DATA_SIZE_B:
-                #             pm.rx_bytes_to_read = FRAME_DATA_SIZE_B
-                #             pm.rx_bytes_to_read = pm.frame_size
-                #         else:
-                #             pass
-                #         pm.print_buff_len()
-                #         pm.frame_size = pm.frame_size - FRAME_DATA_SIZE_B
-                #         pm.expected_num_of_packets = 1 + n.ceil((pm.frame_size)/FRAME_DATA_SIZE_B)
-                #         pm.frame_ctr = pm.frame_ctr + 1
-                #         prnt("Img " + str(pm.frame_ctr) + "/" + str(pm.expected_num_of_packets),0)
-                #
-                #     else:
-                #         ErrorHandler("an image less than 1kB size has arrived")
-                # elif incoming_data[0] == FRAME_SOF:
-                #     prnt("Error: mid frame received first!", 2)
-                #     prnt("img systick to be missed: " + str(pm.sys_tick), 2)
-                #     pm.clear_frame_properties()
-                #     pm.rx_bytes_to_read = MAIN_WIFI_M2M_BUFFER_SIZE  # TODO: IMPORTANT TO CHANGE WHEN IMU IS IMPLEMENTED
-                #
-                #     # TODO: count proceeding errors => network disconnection => fatal error
-                # elif incoming_data[0] == IMU_SOF:
-                #     pm.mode = 2
-                #     pm.sys_tick = FourBytesToUint32(incoming_data, IMU_SOF_SIZE_B) - IMU_SYSTICK_SHIFT_MSEC
-                #     pm.print_IMU_data(incoming_data)
-                #
-                #
-                #     tmp = incoming_data[1:]
-                #     pm.rx_buff = pm.rx_buff + tmp
-                #     # pm.print_buff_len()
-                #     pm.frame_ctr = pm.frame_ctr + 1
-                #     prnt("Img " + str(pm.frame_ctr) + "/" + str(pm.expected_num_of_packets), 0)
-                #
-                #     if pm.frame_size > FRAME_DATA_SIZE_B: # means that there will be an additional packet
-                #         pm.frame_size = pm.frame_size - FRAME_DATA_SIZE_B
-                #         if pm.frame_size >= FRAME_DATA_SIZE_B:
-                #             pm.rx_bytes_to_read = FRAME_DATA_SIZE_B
-                #         else:
-                #             pm.rx_bytes_to_read = pm.frame_size
-                #     else: # means this is the last packet
-                #         pm.save_jpeg()
-                #         # ===== cleaning:  ======
-                #         pm.clear_frame_properties()
-                #         pm.rx_bytes_to_read = 1
-                #
-                #     pm.sys_tick = FourBytesToUint32(incoming_data, 1) # - IMU_SYSTICK_SHIFT_MSEC TODO: Revert and add the -50msec shift
-                #     # pm.print_IMU_data(incoming_data)
-
         else:
             prnt("bye bye..\r\n")
             input()
@@ -198,21 +123,21 @@ class PacketMngr:
         self.port   = a_port
         self.socket = None
         self.rx_bytes_to_read = 1
-        self.frame_rx_buff = None
+        self.frame_rx_buff = bytes()
         self.frame_sys_tick = 0
         self.frame_size =   0
         self.ptr_jpeg   = None
 
-        self.imu_rx_buff = None
+        self.imu_rx_buff = bytes()
         self.imu_sys_tick = 0
 
     def add_socket(self, a_socket):
         self.socket =   a_socket
 
     def save_jpeg(self):
-        prnt("image size =", 0)
-        self.print_buff_len()
-        prnt(("img systick = " + str(self.frame_sys_tick)), 0)
+        # prnt("image size =", 0)
+        # self.print_buff_len()
+        # prnt(("img systick = " + str(self.frame_sys_tick)), 0)
         self.ptr_jpeg = open("outputs\X" + str(self.frame_sys_tick) + ".jpeg", 'w+b')
         self.ptr_jpeg.write(self.frame_rx_buff)
         self.ptr_jpeg.close()
@@ -226,15 +151,15 @@ class PacketMngr:
         self.expected_num_of_packets = 0
         self.ptr_jpeg   = None
         self.mode       =   0 # 0 = off, 1 = Image, 2 = IMU
-        self.frame_rx_buff = None
+        self.frame_rx_buff = bytes(0)
 
     def clear_imu_properties(self):
-        self.imu_rx_buff = None
+        self.imu_rx_buff = bytes(0)
         self.imu_sys_tick = 0
 
     def print_buff_len(self):
         try:
-            print("buff len: " + str(len(self.rx_buff)))
+            print("buff len: " + str(len(self.frame_rx_buff)))
         except:
             print("buff len: 0")
 
