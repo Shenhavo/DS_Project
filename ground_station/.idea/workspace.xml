@@ -52,22 +52,22 @@
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="py" value="4402" />
+          <entry key="py" value="4963" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Python" value="4402" />
+          <entry key="Python" value="4963" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
         <counts>
-          <entry key="py" value="8" />
+          <entry key="py" value="9" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.open">
         <counts>
-          <entry key="Python" value="8" />
+          <entry key="Python" value="9" />
         </counts>
       </usages-collector>
     </session>
@@ -77,10 +77,10 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ground_station_main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="200">
-              <caret line="63" column="45" selection-start-line="63" selection-start-column="45" selection-end-line="63" selection-end-column="45" />
+            <state relative-caret-position="246">
+              <caret line="55" column="50" lean-forward="true" selection-start-line="55" selection-start-column="50" selection-end-line="55" selection-end-column="50" />
               <folding>
-                <element signature="e#1#20#0" expanded="true" />
+                <element signature="e#1#14#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -99,6 +99,8 @@
     <findStrings>
       <find>mid</find>
       <find>new_</find>
+      <find>FRAME_HEADER_SIZE_B</find>
+      <find>ptr_jpeg</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -456,16 +458,16 @@
     <entry file="file://$USER_HOME$/.PyCharmCE2018.2/system/python_stubs/2007653960/builtins.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="157">
-          <caret line="1019" column="8" selection-start-line="1019" selection-start-column="8" selection-end-line="1019" selection-end-column="8" />
+          <caret line="890" column="6" selection-start-line="890" selection-start-column="6" selection-end-line="890" selection-end-column="15" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/ground_station_main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="200">
-          <caret line="63" column="45" selection-start-line="63" selection-start-column="45" selection-end-line="63" selection-end-column="45" />
+        <state relative-caret-position="246">
+          <caret line="55" column="50" lean-forward="true" selection-start-line="55" selection-start-column="50" selection-end-line="55" selection-end-column="50" />
           <folding>
-            <element signature="e#1#20#0" expanded="true" />
+            <element signature="e#1#14#0" expanded="true" />
           </folding>
         </state>
       </provider>

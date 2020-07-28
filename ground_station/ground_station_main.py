@@ -1,13 +1,13 @@
 
 import socket
-import numpy as n
 from datetime import datetime
 
-GLOBAL_VERBOSITY            =   1
+GLOBAL_VERBOSITY            =   0
 
 MAIN_WIFI_M2M_BUFFER_SIZE   =   1024
 FRAME_DATA_SIZE_B           =   1017
-FRAME_HEADER_SIZE_B         =   6
+FRAME_HEADER_WO_SOF_SIZE_B  =   6
+FRAME_HEADER_SIZE_B         =   7
 IMU_PACkET_SIZE_B           =   125
 SOF_SIZE_B                  =   1
 IMU_PACKET_SIZE_WO_HEADER   =   IMU_PACkET_SIZE_B - SOF_SIZE_B
@@ -38,6 +38,7 @@ def main():
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     prnt(("date and time ="+ dt_string),0)
 
+
     pm  = PacketMngr(HOST, PORT)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -55,13 +56,34 @@ def main():
                 incoming_data = s.recv(SOF_SIZE_B)
 
                 if incoming_data[0] == FRAME_SOF:
-                    print("b")
+                    incoming_data = s.recv(FRAME_HEADER_WO_SOF_SIZE_B)
+                    incoming_sys_tick   =    FourBytesToUint32(incoming_data, 0)
+
+                    if pm.frame_sys_tick == 0 or pm.frame_sys_tick == incoming_sys_tick:
+                        pm.frame_sys_tick   = incoming_sys_tick
+                    else:
+                        print("Invalid systick arrived") # TODO: see if it handles missing property
+                        pm.clear_frame_properties()
+                        continue
+                    pm.frame_size = TwoBytesToUint16(incoming_data, 4)
+                    if pm.frame_size > FRAME_DATA_SIZE_B:  # means that there will be an additional packet
+                        if pm.frame_rx_buff == None:
+                            pm.frame_rx_buff = s.recv(FRAME_DATA_SIZE_B)
+                        else:
+                            pm.frame_rx_buff = pm.frame_rx_buff + s.recv(FRAME_DATA_SIZE_B)
+
+                    else: # means this is the last packet
+                        pm.frame_rx_buff = pm.frame_rx_buff + s.recv(pm.frame_size - FRAME_HEADER_SIZE_B)
+                        pm.save_jpeg()
+                        # ===== cleaning:  ======
+                        pm.clear_frame_properties()
+
                 elif incoming_data[0] == IMU_SOF:
                     pm.imu_rx_buff = s.recv(IMU_PACKET_SIZE_WO_HEADER)
-                    pm.sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
+                    pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
                     print(pm.imu_sys_tick)
                     pm.print_IMU_data(pm.imu_rx_buff)
-                    pm.clear_imu_properties()
+                    # pm.clear_imu_properties()
                 else:
                     prnt("ERR SOF", 1)
 
@@ -191,7 +213,7 @@ class PacketMngr:
         prnt("image size =", 0)
         self.print_buff_len()
         prnt(("img systick = " + str(self.frame_sys_tick)), 0)
-        self.ptr_jpeg = open("outputs\X" + str(self.framesys_tick) + ".jpeg", 'w+b')
+        self.ptr_jpeg = open("outputs\X" + str(self.frame_sys_tick) + ".jpeg", 'w+b')
         self.ptr_jpeg.write(self.frame_rx_buff)
         self.ptr_jpeg.close()
 
@@ -217,18 +239,18 @@ class PacketMngr:
             print("buff len: 0")
 
     def print_IMU_data(self,a_byte_arr):
-        prnt(("imu systick = " + str(self.imu_sys_tick)), 0)
+        # prnt(("imu systick = " + str(self.imu_sys_tick)), 0)
         for imu_call_idx in range(IMU_CALLS_PER_PACKET):
-            prnt(("Gyro X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT) )), 0)
-            prnt(("Gyro Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT) )),
+            prnt(("Gyro X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT)/131.0 )), 0)
+            prnt(("Gyro Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT)/131.0 )),
                  0)
-            prnt(("Gyro Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT) )),
+            prnt(("Gyro Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT)/131.0 )),
                  0)
-            prnt(("Acc X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT) )),
+            prnt(("Acc X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT)/16384.0 )),
                  0)
-            prnt(("Acc Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT) )),
+            prnt(("Acc Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT)/16384.0  )),
                  0)
-            prnt(("Acc Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT) )),
+            prnt(("Acc Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT)/16384.0  )),
                  0)
 
 
