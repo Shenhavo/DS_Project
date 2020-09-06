@@ -1,6 +1,10 @@
 
 import socket
 from datetime import datetime
+import os
+import subprocess
+import time
+# import cv2
 
 GLOBAL_VERBOSITY            =   5
 
@@ -32,13 +36,40 @@ ACC_X_SHIFT                 =   6
 ACC_Y_SHIFT                 =   8
 ACC_Z_SHIFT                 =   10
 
+SSID = 'WINC1500_AP'
 
 def main():
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    prnt(("date and time ="+ dt_string),0)
+    prnt(("date and time ="+ dt_string), 0)
+    # define the name of the directory to be created
+    path = r"outputs\\" + now.strftime("%d%m%Y-%H%M%S")
 
-    pm  = PacketMngr(HOST, PORT)
+    try:
+        os.mkdir(path)
+    except OSError:
+        print ("directory creation %s failed" % path)
+    else:
+        print ("created  directory %s " % path)
+
+    # this section is tested with WIN10
+    try:
+        cmd = "netsh wlan connect name={0} ssid={0}".format(SSID)
+        k = subprocess.run(cmd, capture_output=True, text=True).stdout
+        # print("connection succeed: " + k)
+        time.sleep(2)
+        cmd = "netsh wlan show interfaces"
+        k = subprocess.run(cmd, capture_output=True, text=True).stdout
+        connection_result = k.find(SSID)
+        if connection_result > 0:
+            print("connected")
+        else:
+            print("NOT connected")
+    except:
+        print("could not connect AP: " + k)
+
+
+    pm = PacketMngr(HOST, PORT)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         pm.add_socket(s)
@@ -56,10 +87,10 @@ def main():
                 print("SOF="+str(incoming_data))
                 if incoming_data[0] == FRAME_SOF:
                     incoming_data = s.recv(FRAME_HEADER_WO_SOF_SIZE_B)
-                    incoming_sys_tick   =    FourBytesToUint32(incoming_data, 0)
+                    incoming_sys_tick = FourBytesToUint32(incoming_data, 0)
                     print("tick=" + str(incoming_sys_tick))
                     if pm.frame_sys_tick == 0 or pm.frame_sys_tick == incoming_sys_tick:
-                        pm.frame_sys_tick   = incoming_sys_tick
+                        pm.frame_sys_tick = incoming_sys_tick
                     else:
                         print("Invalid systick arrived") # TODO: see if it handles missing property
                         pm.clear_frame_properties()
@@ -72,8 +103,17 @@ def main():
                             pm.frame_rx_buff = pm.frame_rx_buff + s.recv(FRAME_DATA_SIZE_B)
 
                     else: # means this is the last packet
-                        pm.frame_rx_buff = pm.frame_rx_buff + s.recv(pm.frame_size - FRAME_HEADER_SIZE_B)
-                        pm.save_jpeg()
+                        try:
+                            pm.frame_rx_buff = pm.frame_rx_buff + s.recv(pm.frame_size - FRAME_HEADER_SIZE_B)
+                        except:
+                            expected_frame_size = pm.frame_size - FRAME_HEADER_SIZE_B
+                            print("bad recv size: %d" % expected_frame_size)
+                        else:
+                            pm.save_jpeg(path)
+                            # pm.crop_cheat(pm.last_saved_img_path)
+                            delta_tick = pm.frame_sys_tick - pm.last_valid_frame_sys_tick
+                            print("sys_tick diff = %d [msec]" % delta_tick)
+                            pm.last_valid_frame_sys_tick = pm.frame_sys_tick
                         # ===== cleaning:  ======
                         pm.clear_frame_properties()
 
@@ -125,8 +165,10 @@ class PacketMngr:
         self.rx_bytes_to_read = 1
         self.frame_rx_buff = bytes()
         self.frame_sys_tick = 0
+        self.last_valid_frame_sys_tick = 0
         self.frame_size =   0
         self.ptr_jpeg   = None
+        self.last_saved_img_path = ''
 
         self.imu_rx_buff = bytes()
         self.imu_sys_tick = 0
@@ -134,13 +176,21 @@ class PacketMngr:
     def add_socket(self, a_socket):
         self.socket =   a_socket
 
-    def save_jpeg(self):
+    def save_jpeg(self, save_path):
         # prnt("image size =", 0)
         # self.print_buff_len()
         # prnt(("img systick = " + str(self.frame_sys_tick)), 0)
-        self.ptr_jpeg = open("outputs\X" + str(self.frame_sys_tick) + ".jpeg", 'w+b')
+        self.last_saved_img_path = save_path + "\\" + str(self.frame_sys_tick) + ".jpeg"
+        self.ptr_jpeg = open(self.last_saved_img_path, 'w+b')
         self.ptr_jpeg.write(self.frame_rx_buff)
         self.ptr_jpeg.close()
+
+    def crop_cheat(self, img_path):
+        img = cv2.imread(img_path)
+        crop_img = img[16:288, 0:240]
+        # cv2.imshow("cropped" + img_path, crop_img)
+        cv2.imwrite(self.last_saved_img_path, crop_img)
+        # cv2.waitKey(0)
 
 
     def clear_frame_properties(self):
