@@ -195,10 +195,12 @@ class PacketMngr:
         # self.ptr_jpeg = open(self.last_saved_img_path, 'w+b')
         # self.ptr_jpeg.write(self.frame_rx_buff)
         # self.ptr_jpeg.close()
-        f_bin_out_path = curr_saved_file_name + ".bin"
-        f_bin_out = open(f_bin_out_path, "wb")
-        f_bin_out.write(self.frame_rx_buff)
-        f_bin_out.close()
+        # f_bin_out_path = curr_saved_file_name + ".bin"
+        # f_bin_out = open(f_bin_out_path, "wb")
+        # f_bin_out.write(self.frame_rx_buff)
+        # f_bin_out.close()
+
+        self.crop_img(self.last_saved_img_path)
 
         # fix_jpeg_save_path = save_path + "\\" + str(self.frame_sys_tick) + "fix.jpeg"
         # img = cv2.imread(self.last_saved_img_path)
@@ -211,12 +213,17 @@ class PacketMngr:
 #        Image.open(self.last_saved_img_path).save("sample1.bmp")
 
     # TOOD: remove
-    def crop_cheat(self, img_path):
-        img = cv2.imread(img_path)
-        crop_img = img[16:288, 0:240]
-        # cv2.imshow("cropped" + img_path, crop_img)
-        cv2.imwrite(self.last_saved_img_path, crop_img)
-        # cv2.waitKey(0)
+    def crop_img(self, img_path):
+        try:
+            img = cv2.imread(img_path)
+            cropped_img = img[16:240, 0:320]
+            # cv2.imshow("cropped" + img_path, crop_img)
+            cropped_img_file_name = self.last_saved_img_path.replace('.jpeg', '_c.jpeg')
+
+            cv2.imwrite(cropped_img_file_name, cropped_img)
+            # cv2.waitKey(0)
+        except:
+            None
 
 
     def clear_frame_properties(self):
