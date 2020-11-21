@@ -4,11 +4,12 @@ from datetime import datetime
 import os
 import subprocess
 import time
-from PIL import Image
+import numpy as np
 import cv2
-import pickle
+import threading
+import matplotlib.pyplot as plt
 
-GLOBAL_VERBOSITY            =   5
+GLOBAL_VERBOSITY            =   0
 
 MAIN_WIFI_M2M_BUFFER_SIZE   =   1024
 FRAME_DATA_SIZE_B           =   1017
@@ -38,12 +39,21 @@ ACC_X_SHIFT                 =   6
 ACC_Y_SHIFT                 =   8
 ACC_Z_SHIFT                 =   10
 
+IMG_H                       = 240
+IMG_W                       = 320
+IMG_H_CROP                  = 16
+
+TARGET_START_SEND_CMD       = b'Start\r\n'
+
 SSID = 'WINC1500_AP'
+
+ERR_IMG_PATH = r"err.jpg"
+
 
 def main():
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    prnt(("date and time =" + dt_string), 0)
+    prnt(("date and time = " + dt_string), 0)
     # define the name of the directory to be created
     path = r"outputs\\" + now.strftime("%d%m%Y-%H%M%S")
 
@@ -70,21 +80,34 @@ def main():
     except:
         print("could not connect AP: " + k)
 
-
     pm = PacketMngr(HOST, PORT)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         pm.add_socket(s)
         pm.socket.connect((pm.host, pm.port))
-        #
+
         # print("Are you ready to start? y/n\r\n")
         # user_intput = input()
         #
         # if( user_intput == 'y'):
-        s.sendall(b'Start\r\n')
+        s.sendall(TARGET_START_SEND_CMD)
+
+        display_img_thread = threading.Thread(target=pm.display_img)
+        display_img_thread.setDaemon(True)
+        display_img_thread.start()
+
+        # display_imu_thread = threading.Thread(target=pm.display_imu)
+        # display_imu_thread.setDaemon(True)
+        # display_imu_thread.start()
+
+        acc_x_values = []
+        acc_y_values = []
+        acc_z_values = []
+        #
+        # imu_plt = plt.plot(0, acc_x_values)
+        # plt.show()
 
         while True:
-
             incoming_data = s.recv(SOF_SIZE_B)
             print("SOF="+str(incoming_data))
             if incoming_data[0] == FRAME_SOF:
@@ -113,25 +136,31 @@ def main():
                     else:
                         print("frame recv size: %d" % len(pm.frame_rx_buff))
                         pm.save_jpeg(path)
-                        # pm.crop_cheat(pm.last_saved_img_path)
                         delta_tick = pm.frame_sys_tick - pm.last_valid_frame_sys_tick
                         print("sys_tick diff = %d [msec]" % delta_tick)
                         pm.last_valid_frame_sys_tick = pm.frame_sys_tick
                     # ===== cleaning:  ======
                     pm.clear_frame_properties()
 
-            # elif incoming_data[0] == IMU_SOF:
-            #     pm.imu_rx_buff = s.recv(IMU_PACKET_SIZE_WO_HEADER)
-            #     pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
-            #     print( "X" +str(pm.imu_sys_tick))
-            #     # pm.print_IMU_data(pm.imu_rx_buff)
-            #     # pm.clear_imu_properties()
+            elif incoming_data[0] == IMU_SOF:
+                pm.imu_rx_buff = s.recv(IMU_PACKET_SIZE_WO_HEADER)
+                pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
+                print("X" + str(pm.imu_sys_tick))
+                pm.process_imu_data(pm.imu_rx_buff)
+                pm.print_imu_data()
+                # acc_x_values.append(pm.acc_x)
+                # acc_y_values.append(pm.acc_y)
+                # acc_z_values.append(pm.acc_z)
+
+                pm.clear_imu_properties()
             else:
                 prnt("ERR SOF", 1)
+
         else:
             prnt("bye bye..\r\n")
             input()
             exit(1)
+
 def TwoBytesToUint16 (a_byte_arr, a_shift = 0):
     return int.from_bytes( a_byte_arr[a_shift:a_shift+2],byteorder='little',signed=False)
 
@@ -159,6 +188,7 @@ def prnt(a_string ="", a_verbosity = 10000):
     if(a_verbosity >= GLOBAL_VERBOSITY):
         print(a_string)
 
+
 class PacketMngr:
 
     def __init__(self, a_host, a_port):
@@ -172,9 +202,20 @@ class PacketMngr:
         self.frame_size =   0
         self.ptr_jpeg   = None
         self.last_saved_img_path = ''
+        self.last_saved_cropped_img_path = ''
 
         self.imu_rx_buff = bytes()
         self.imu_sys_tick = 0
+
+        self.new_img_rec = False
+        self.new_imu_rec = False
+
+        self.gyro_x = 0
+        self.gyro_y = 0
+        self.gyro_z = 0
+        self.acc_x = 0
+        self.acc_y = 0
+        self.acc_z = 0
 
     def add_socket(self, a_socket):
         self.socket =   a_socket
@@ -189,41 +230,60 @@ class PacketMngr:
         self.ptr_jpeg = open(self.last_saved_img_path, "wb")
         self.ptr_jpeg.write(self.frame_rx_buff)
         self.ptr_jpeg.close()
-
-        #TODO: remove
-        # self.last_saved_img_path = save_path + "\\" + str(self.frame_sys_tick) + ".bmp"
-        # self.ptr_jpeg = open(self.last_saved_img_path, 'w+b')
-        # self.ptr_jpeg.write(self.frame_rx_buff)
-        # self.ptr_jpeg.close()
-        # f_bin_out_path = curr_saved_file_name + ".bin"
-        # f_bin_out = open(f_bin_out_path, "wb")
-        # f_bin_out.write(self.frame_rx_buff)
-        # f_bin_out.close()
-
         self.crop_img(self.last_saved_img_path)
+        self.new_img_rec = True
 
-        # fix_jpeg_save_path = save_path + "\\" + str(self.frame_sys_tick) + "fix.jpeg"
-        # img = cv2.imread(self.last_saved_img_path)
-        # cv2.imshow('image', img)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-        # crop_img = img[16:288, 0:240]
-        # cv2.imshow("cropped" + img_path, crop_img)
-        # cv2.imwrite(fix_jpeg_save_path, img)
-#        Image.open(self.last_saved_img_path).save("sample1.bmp")
+    def display_img(self):
+        img_plt = None
+        while True:
+            if self.new_img_rec:
+                self.new_img_rec = False
+                print("displaying new img")
+                try:
+                    img = plt.imread(self.last_saved_cropped_img_path)
+                    if img_plt is None:
+                        img_plt = plt.imshow(img)
+                    else:
+                        img_plt.set_data(img)
+                    plt.pause(.001)  # needs to be less then 1/15fps
+                    plt.draw()
+                except:
+                    img = plt.imread(ERR_IMG_PATH)
+                    if img_plt is None:
+                        img_plt = plt.imshow(img)
+                    else:
+                        img_plt.set_data(img)
+                    plt.pause(.001)  # needs to be less then 1/15fps
+                    plt.draw()
+                    print("img show err")
 
-    # TOOD: remove
+    # def display_imu(self):
+    #     imu_plt = None
+    #     while True:
+    #         if self.new_imu_rec:
+    #             self.new_imu_rec = False
+    #             print("displaying new imu")
+    #             try:
+    #                 if imu_plt is None:
+    #                     imu_plt = plt.plot(0, 0)
+    #                 else:
+    #                     imu_plt.set_data(np.linspace(0, len(self.acc_x)), self.acc_x)
+    #                 plt.pause(.067) # ~15fps
+    #                 plt.draw()
+    #             except:
+    #                 print("imu show err")
+
     def crop_img(self, img_path):
         try:
             img = cv2.imread(img_path)
-            cropped_img = img[16:240, 0:320]
-            # cv2.imshow("cropped" + img_path, crop_img)
-            cropped_img_file_name = self.last_saved_img_path.replace('.jpeg', '_c.jpeg')
-
-            cv2.imwrite(cropped_img_file_name, cropped_img)
-            # cv2.waitKey(0)
+            cropped_img = img[IMG_H_CROP:IMG_H, 0:IMG_W]
+            self.last_saved_cropped_img_path = self.last_saved_img_path.replace('.jpeg', '_c.jpeg')
+            # self.last_saved_img_path = cropped_img_file_name
+            cropped_img = cv2.flip(cropped_img, 1)
+            cropped_img = cv2.rotate(cropped_img, cv2.ROTATE_180)
+            cv2.imwrite(self.last_saved_cropped_img_path, cropped_img)
         except:
-            None
+            print("crop img err")
 
 
     def clear_frame_properties(self):
@@ -246,22 +306,24 @@ class PacketMngr:
         except:
             print("buff len: 0")
 
-    def print_IMU_data(self,a_byte_arr):
-        # prnt(("imu systick = " + str(self.imu_sys_tick)), 0)
+    def process_imu_data(self, a_byte_arr):
+        self.new_imu_rec = True
+
         for imu_call_idx in range(IMU_CALLS_PER_PACKET):
-            prnt(("Gyro X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT)/131.0 )), 0)
-            prnt(("Gyro Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT)/131.0 )),
-                 0)
-            prnt(("Gyro Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT)/131.0 )),
-                 0)
-            prnt(("Acc X = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT)/16384.0 )),
-                 0)
-            prnt(("Acc Y = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT)/16384.0  )),
-                 0)
-            prnt(("Acc Z = " + str(TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT)/16384.0  )),
-                 0)
+            self.gyro_x = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT) / 131.0
+            self.gyro_y = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT) / 131.0
+            self.gyro_z = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT) / 131.0
+            self.acc_x = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT) / 16384.0
+            self.acc_y = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT) / 16384.0
+            self.acc_z = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT) / 16384.0
 
-
+    def print_imu_data(self):
+        prnt(("Gyro X = " + str(self.gyro_x)), 0)
+        prnt(("Gyro Y = " + str(self.gyro_y)), 0)
+        prnt(("Gyro Z = " + str(self.gyro_z)), 0)
+        prnt(("Acc X = " + str(self.acc_x)), 0)
+        prnt(("Acc Y = " + str(self.acc_y)), 0)
+        prnt(("Acc Z = " + str(self.acc_z)), 0)
 
 
 if __name__ == "__main__":
