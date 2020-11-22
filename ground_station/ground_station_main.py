@@ -4,7 +4,6 @@ from datetime import datetime
 import os
 import subprocess
 import time
-import numpy as np
 import cv2
 import threading
 import matplotlib.pyplot as plt
@@ -17,7 +16,7 @@ FRAME_HEADER_WO_SOF_SIZE_B  =   6
 FRAME_HEADER_SIZE_B         =   7
 IMU_PACkET_SIZE_B           =   125
 SOF_SIZE_B                  =   1
-IMU_PACKET_SIZE_WO_HEADER   =   IMU_PACkET_SIZE_B - SOF_SIZE_B
+IMU_PACKET_SIZE_WO_HEADER   =   (IMU_PACkET_SIZE_B - SOF_SIZE_B)
 
 HOST = '192.168.1.1'  # Standard loopback interface address (localhost)
 PORT = 6666  # Port to listen on (non-privileged ports are > 1023)
@@ -31,7 +30,7 @@ SYSTICK_SIZE_B              =   4
 IMU_DATA_SHIFT_SIZE_B       =   SYSTICK_SIZE_B
 IMU_PARAMETER_SIZE_B        =   2
 IMU_PARAMETERS_PER_CALL     =   6
-IMU_CALL_SIZE_B             =   IMU_PARAMETER_SIZE_B*IMU_PARAMETERS_PER_CALL
+IMU_CALL_SIZE_B             =   (IMU_PARAMETER_SIZE_B * IMU_PARAMETERS_PER_CALL)
 GYRO_X_SHIFT                =   0
 GYRO_Y_SHIFT                =   2
 GYRO_Z_SHIFT                =   4
@@ -47,7 +46,9 @@ TARGET_START_SEND_CMD       = b'Start\r\n'
 
 SSID = 'WINC1500_AP'
 
-ERR_IMG_PATH = r"err.jpg"
+ERR_IMG_PATH = r"err_img.jpg"
+
+IS_DISP_ERR_IMG = False
 
 
 def main():
@@ -113,7 +114,7 @@ def main():
             if incoming_data[0] == FRAME_SOF:
                 incoming_data = s.recv(FRAME_HEADER_WO_SOF_SIZE_B)
                 incoming_sys_tick = FourBytesToUint32(incoming_data, 0)
-                print("tick=" + str(incoming_sys_tick))
+                # print("tick=" + str(incoming_sys_tick))
                 if pm.frame_sys_tick == 0 or pm.frame_sys_tick == incoming_sys_tick:
                     pm.frame_sys_tick = incoming_sys_tick
                 else:
@@ -121,6 +122,7 @@ def main():
                     pm.clear_frame_properties()
                     continue
                 pm.frame_size = TwoBytesToUint16(incoming_data, 4)
+                print("tick = %d \tframe_size = %d" % (pm.frame_sys_tick, pm.frame_size))
                 if pm.frame_size > FRAME_DATA_SIZE_B:  # means that there will be an additional packet
                     if pm.frame_rx_buff == bytes(0):
                         pm.frame_rx_buff = s.recv(FRAME_DATA_SIZE_B)
@@ -248,11 +250,12 @@ class PacketMngr:
                     plt.pause(.001)  # needs to be less then 1/15fps
                     plt.draw()
                 except:
-                    img = plt.imread(ERR_IMG_PATH)
-                    if img_plt is None:
-                        img_plt = plt.imshow(img)
-                    else:
-                        img_plt.set_data(img)
+                    if IS_DISP_ERR_IMG:
+                        img = plt.imread(ERR_IMG_PATH)
+                        if img_plt is None:
+                            img_plt = plt.imshow(img)
+                        else:
+                            img_plt.set_data(img)
                     plt.pause(.001)  # needs to be less then 1/15fps
                     plt.draw()
                     print("img show err")
