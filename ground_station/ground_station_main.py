@@ -38,9 +38,11 @@ ACC_X_SHIFT                 =   6
 ACC_Y_SHIFT                 =   8
 ACC_Z_SHIFT                 =   10
 
-IMG_H                       = 240
+IMG_H_TOP_CROP              = 32
+IMG_H_BOTTOM_CROP           = 16
+IMG_H                       = (240+16)
 IMG_W                       = 320
-IMG_H_CROP                  = 16
+
 
 TARGET_START_SEND_CMD       = b'Start\r\n'
 
@@ -285,7 +287,7 @@ class PacketMngr:
     def crop_img(self, img_path):
         try:
             img = cv2.imread(img_path)
-            cropped_img = img[IMG_H_CROP:IMG_H, 0:IMG_W]
+            cropped_img = img[IMG_H_BOTTOM_CROP:IMG_H-IMG_H_TOP_CROP, 0:IMG_W]
             self.last_saved_cropped_img_path = self.last_saved_img_path.replace('.jpeg', '_c.jpeg')
             # self.last_saved_img_path = cropped_img_file_name
             cropped_img = cv2.flip(cropped_img, 1)
