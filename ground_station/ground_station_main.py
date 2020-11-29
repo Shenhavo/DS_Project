@@ -138,6 +138,8 @@ def main():
                     else:
                         print("frame recv size: %d" % len(pm.frame_rx_buff))
                         pm.save_jpeg(path)
+                        pm.calc_ber()
+                        pm.frame_rx_buff = bytes()
                         delta_tick = pm.frame_sys_tick - pm.last_valid_frame_sys_tick
                         print("sys_tick diff = %d [msec]" % delta_tick)
                         pm.last_valid_frame_sys_tick = pm.frame_sys_tick
@@ -149,7 +151,7 @@ def main():
                 pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
                 print("X" + str(pm.imu_sys_tick))
                 pm.process_imu_data(pm.imu_rx_buff)
-                pm.print_imu_data()
+                # pm.print_imu_data()
                 # acc_x_values.append(pm.acc_x)
                 # acc_y_values.append(pm.acc_y)
                 # acc_z_values.append(pm.acc_z)
@@ -211,6 +213,10 @@ class PacketMngr:
 
         self.new_img_rec = False
         self.new_imu_rec = False
+
+        self.checksum = 0
+        self.err_ctr = 0.0
+        self.total_bytes_rec = 0.0
 
         self.gyro_x = 0
         self.gyro_y = 0
@@ -328,7 +334,19 @@ class PacketMngr:
         prnt(("Acc Y = " + str(self.acc_y)), 0)
         prnt(("Acc Z = " + str(self.acc_z)), 0)
 
+    def calc_ber(self):
+        self.checksum = 0
+        is_err = False
 
+        for i in range(len(self.frame_rx_buff)):
+            self.checksum += self.frame_rx_buff[i]
+            if self.frame_rx_buff[i] != 0xFF:
+                is_err |= True
+                self.err_ctr += 1
+            self.total_bytes_rec += 1
+
+        print("tick = %d \tframe_size = %d, is Err = %s" % (self.frame_sys_tick,len(self.frame_rx_buff), str(is_err)))
+        print("BER = %f [percent]" % (100*self.err_ctr/self.total_bytes_rec))
 if __name__ == "__main__":
     main()
 
