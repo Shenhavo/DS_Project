@@ -38,9 +38,10 @@ ACC_X_SHIFT                 =   6
 ACC_Y_SHIFT                 =   8
 ACC_Z_SHIFT                 =   10
 
-IMG_H_TOP_CROP              = 32
+IMG_H_TOP_CROP              = 64
 IMG_H_BOTTOM_CROP           = 16
-IMG_H                       = (240+16)
+IMG_H_MARGIN                = 32
+IMG_H                       = (240 + IMG_H_MARGIN)
 IMG_W                       = 320
 
 
